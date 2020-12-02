@@ -1,0 +1,816 @@
+import React, { Component } from 'react';
+import {
+    Platform,
+    Text,
+    Image,
+    View,
+    Dimensions,
+    Linking,
+    ScrollView,
+    Share,
+
+    TouchableOpacity, Animated,
+} from 'react-native';
+import {
+    Container,
+    Content,
+    Button,
+    Icon,
+    Title,
+    Header,
+    Left,
+    Body,
+    Right,
+    Toast, Textarea
+} from 'native-base';
+import ImageViewer from 'react-native-image-zoom-viewer';
+import { LinearGradient } from 'expo';
+import Swiper from 'react-native-swiper';
+import { Video } from 'expo-av'
+ import Modal from "react-native-modal";
+import axios from "axios";
+import {NavigationEvents} from "react-navigation";
+import I18n from "ex-react-native-i18n";
+import CONST from '../consts';
+import StarRating from 'react-native-star-rating';
+const width = Dimensions.get('window').width;
+import {connect} from "react-redux";
+import {profile, userLogin} from "../actions";
+import HTML from "react-native-render-html";
+import styles from '../../assets/style'
+import ShimmerPlaceHolder from "react-native-shimmer-placeholder";
+class DetilsE3lan extends Component {
+
+    constructor(props) {
+    super(props);
+    this.state = {
+        blog         : '',
+        comment      : '',
+        lang         : this.props.lang,
+        is_favourite : 0,
+        images       : [],
+        spinner      :  false,
+        comments     : [],
+        all_comments : [],
+        results      : [],
+        user_id      : null,
+        isImageViewVisible: false,
+        is_video     : false,
+        user_provider  : '',
+        rate:0.0,
+        mobile:'',
+        name:'',
+        currency:'',
+        avatar:'',
+        id:'',
+        region: {
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+            latitude: null,
+            longitude: null
+        },
+        selected2: undefined,
+        showSwiper    : true,
+        isModalVisible    : false,
+        commentModal      : false,
+        addComment        : false,
+        type : null,
+        model_car : '',
+        show_model : null,
+        index : 0,
+        resetImageByIndex : 0
+    };
+
+  }
+
+    onShare = async () => {
+        try {
+            const result = await Share.share({
+                title: this.state.blog.title,
+                message: this.state.blog.url,
+                // url: this.state.blog.url,
+            });
+
+            if (result.action === Share.sharedAction) {
+                if (result.activityType) {
+                    // shared with activity type of result.activityType
+                } else {
+                    // shared
+                }
+            } else if (result.action === Share.dismissedAction) {
+                // dismissed
+            }
+        } catch (error) {
+
+        }
+    };
+
+    favourite() {
+
+        if(this.props.user){
+            axios.post(`${CONST.url}favouriteBlog`, {
+                lang      : this.props.lang ,
+                id        : this.props.navigation.state.params.blog_id ,
+                user_id   : this.state.user_id
+            }).then( (response)=> {
+                    Toast.show({
+                        text          : response.data.msg,
+                        duration      : 2000,
+                        type          : "success",
+                        textStyle     : {
+                            color         : "white",
+                            fontFamily    : 'CairoRegular' ,
+                            textAlign     : 'center'
+                        }
+                    });
+
+                    this.setState({
+                        is_favourite: response.data.fav,
+                        spinner: false
+                    });
+
+                })
+                .catch( (error)=> {
+                    Toast.show({ text : error.message});
+                    this.setState({spinner: false});
+                })
+        }else{
+            this.props.navigation.navigate('login');
+        }
+
+    }
+
+    componentWillMount() {
+        this.runPlaceHolder();
+        if(this.props.user) {
+            this.setState({user_id  : this.props.user.id})
+        }
+
+        this.setState({spinner: true});
+        axios.post(`${CONST.url}BlogDetails`, {
+            lang        : this.props.lang ,
+            id          : this.props.navigation.state.params.blog_id  ,
+            user_id     : this.state.user_id
+        })
+            .then( (response)=> {
+                if(response.data.value === '0')
+                {
+                     this.props.navigation.navigate('home')
+                }else{
+
+                    this.setState({
+                        blog                : response.data.data,
+                        mobile              : response.data.data.mobile,
+                        rate                : response.data.data.user.rate,
+                        name                : response.data.data.user.name,
+                        currency            : response.data.data.currency,
+                        avatar              : response.data.data.user.avatar,
+                        id                  : response.data.data.user.id,
+                        user_provider       : response.data.data.user,
+                        images              : response.data.data.images,
+                        is_location         : response.data.data.is_location,
+                        model_car           : response.data.data.model,
+                        show_model          : response.data.data.show_model,
+                        results             : response.data.data.results,
+                        is_favourite        : response.data.data.is_fav,
+                        comments            : response.data.data.comments.slice(Math.max(response.data.data.comments.length - 2 )),
+                        all_comments        : response.data.data.comments,
+                        region              : {
+                            latitude        : response.data.data.latitude,
+                            longitude       : response.data.data.longitude,
+                            latitudeDelta   : 0.0922,
+                            longitudeDelta  : 0.0421,
+                        }
+                    },()=>{
+                    });
+                }
+            }).catch( (error)=> {
+                this.setState({spinner: false});
+            }) .then( ()=> {
+            this.setState({spinner: false});
+        })
+
+
+    }
+
+    onFocus(){
+        this.componentWillMount()
+    }
+
+    CommentBlog() {
+        if(this.state.comment === '') {
+            Toast.show({
+                text            : (this.props.lang === 'en') ? 'Leave suitable comment' : 'اترك تعليق مناسب',
+                duration        : 2000  ,
+                type            : "danger",
+                textStyle           : {
+                    color               : "white",
+                    fontFamily          : 'CairoRegular' ,
+                    textAlign           : 'center'
+                }
+            });
+        }else{
+
+            this.setState({spinner: true});
+
+            axios.post(`${CONST.url}CommentBlog`, {
+                lang: this.props.lang ,
+                comment: this.state.comment,
+                blog_id : this.props.navigation.state.params.blog_id ,
+                user_id : this.state.user_id
+            })
+            .then( (response)=> {
+                this.setState({comment: '', spinner: false});
+
+                this.state.comments.push(response.data.data);
+                this.state.all_comments.push(response.data.data);
+
+                setTimeout(() => {this.setState({commentModal: false})}, 1000)
+
+                Toast.show({
+                    text            : (this.props.lang === 'en') ? 'Commented successfully' : 'تم التعليق بنجاح',
+                    duration        : 2000  ,
+                    type            : "success",
+                    textStyle           : {
+                        color               : "white",
+                        fontFamily          : 'CairoRegular' ,
+                        textAlign           : 'center'
+                    }
+                });
+
+            })
+            .catch( (error)=> {
+                this.setState({spinner: false});
+            })
+
+        }
+
+    }
+
+    commentModal(type){
+
+        if (type === 1){
+            this.setState({ commentModal: true })
+        }else if(type === 2){
+            this.setState({ commentModal: true, addComment: false  });
+        }else{
+            this.setState({ commentModal: false, addComment: true  })
+        }
+
+    }
+
+    delete(id , i,type) {
+        this.setState({spinner: true});
+        axios.post(`${CONST.url}delete_comment`, { lang: this.props.lang ,id: id })
+            .then( (response)=> {
+
+                if(response.data.value === '1') {
+                        this.state.all_comments.splice(i,1);
+                        this.state.comments.splice(i,1);
+                    Toast.show({ text: response.data.msg, duration : 2000  ,type :"danger", textStyle: {  color: "white",fontFamily : 'CairoRegular' ,textAlign:'center' } });
+                }else{
+                    Toast.show({ text: response.data.msg, duration : 2000  ,type :"success", textStyle: {  color: "white",fontFamily : 'CairoRegular' ,textAlign:'center' } });
+                }
+                this.setState({spinner: false});
+            })
+
+    }
+
+    _renderRows(loadingAnimated, numberRow, uniqueKey) {
+        let shimmerRows = [];
+        for (let index = 0; index < numberRow; index++) {
+            shimmerRows.push(
+                <ShimmerPlaceHolder
+                    key={`loading-${index}-${uniqueKey}`}
+                    ref={(ref) => loadingAnimated.push(ref)}
+                    style={{marginVertical: 7, alignSelf: 'center'}}
+                    width={width - 20}
+                    height={100}
+                    colorShimmer={['#ffffff75', '#00374B94', '#ffffff75']}
+                />
+            )
+        }
+        return (
+            <View>
+                {shimmerRows}
+            </View>
+        )
+    }
+
+    runPlaceHolder() {
+        if (Array.isArray(this.loadingAnimated) && this.loadingAnimated.length > 0) {
+            Animated.parallel(
+                this.loadingAnimated.map(animate => {
+                    if (animate&&animate.getAnimated) {
+                        return animate.getAnimated();
+                    }
+                    return null;
+                }),
+                {
+                    stopTogether: false,
+                }
+            ).start(() => {
+                this.runPlaceHolder();
+            })
+        }
+    }
+
+    openMap(lat,lng){
+        const scheme = Platform.select({ ios: 'maps:0,0?q=', android: 'geo:0,0?q=' });
+        const latLng = `${lat},${lng}`;
+        const label = 'Custom Label';
+        const url = Platform.select({
+            ios   : `${scheme}${label}@${latLng}`,
+            android: `${scheme}${latLng}(${label})`
+        });
+        Linking.openURL(url);
+    }
+
+    render() {
+        this.loadingAnimated = [];
+      return (
+      <Container>
+
+          <Header style={styles.Header_Up}>
+              <Left style={[styles.LeftDir,styles.flex]}>
+
+              </Left>
+              <Body style={[styles.body_header,styles.flex]}>
+                  <Title style={styles.headerTitle}>{I18n.translate('productDet')}</Title>
+              </Body>
+              <Right style={[ styles.RightDir ,styles.flex]}>
+                  <Button transparent onPress={()=> this.props.navigation.goBack()} >
+                      <Icon style={styles.icons} type="Ionicons" name='ios-arrow-back' />
+                  </Button>
+              </Right>
+          </Header>
+          <Content>
+                      <View>
+                      <NavigationEvents onWillFocus={() => this.onFocus()}/>
+                          {  this.state.spinner ?
+                          this._renderRows(this.loadingAnimated, 5, '5rows'):
+                      <View style={styles.block_slider}>
+                          <Button transparent onPress={() => this.favourite()} style={{
+                              position: 'absolute',
+                              top: 0,
+                              right: 0,
+                              zIndex: 99,
+                              padding: 0,
+                              margin: 0,
+                              backgroundColor: 'rgba(0,0,0,0.7)'
+                          }}>
+                              <Icon style={{color: this.state.is_favourite === 1 ? '#f00' : '#fff', fontSize: 20}}
+                                    type="MaterialIcons"
+                                    name={(this.state.is_favourite === 1) ? 'favorite' : 'favorite-border'}/>
+                          </Button>
+                          <View style={{
+                              position: 'absolute',
+                              bottom: 0,
+                              width: '100%',
+                              backgroundColor: 'rgba(0,0,0,0.7)',
+                              display: 'flex',
+                              flexDirection: 'row',
+                              justifyContent: 'space-between',
+                              zIndex: 99,
+                              padding: 5,
+                              alignItems: 'center'
+                          }}>
+                              {
+                                  (this.state.blog.user_id !== this.state.user_id) ?                                      <TouchableOpacity onPress={() => {
+                                          this.props.navigation.navigate('UserDetailes', {user_id: this.state.id})
+                                      }} style={{flexDirection: 'row', alignItems: 'center'}}>
+                                          <Image source={{uri: this.state.avatar}} style={{
+                                              width: 30,
+                                              height: 30,
+                                              borderRadius: 50,
+                                              borderWidth: 1,
+                                              borderColor: '#DDD',
+                                              marginHorizontal: 5
+                                          }} resizeMode='cover'/>
+                                          <Text style={{
+                                              fontSize: 13,
+                                              fontFamily: 'CairoBold',
+                                              color: "#FFF"
+                                          }}>{this.state.name}</Text>
+                                      </TouchableOpacity>
+                                      :
+                                      <View/>
+                              }
+                              <Text style={{
+                                  fontFamily: 'CairoBold',
+                                  fontSize: 13,
+                                  color: "#FFF"
+                              }}>{this.state.blog.price} {this.state.currency}  </Text>
+                          </View>
+                          <Swiper
+                              containerStyle={[styles.wrapper]}
+                              autoplayDelay={1.5}
+                              autoplayLoop
+                              key={this.state.images.length}
+                              autoplayTimeout={2}
+                              autoplay={true}
+                          >
+                              {
+                                  this.state.images.map((slider, i) => {
+                                      return (
+                                          <View key={i}>
+                                              <TouchableOpacity onPress={() => {this.setState({isImageViewVisible: true,resetImageByIndex : i,})}}>
+                                                  <Image style={styles.slide} source={{uri: slider.url}} resizeMode={'stretch'} />
+                                              </TouchableOpacity>
+                                          </View>
+                                      )
+                                  })
+                              }
+                          </Swiper>
+                      </View>
+                          }
+
+
+                          <Modal style={{backgroundColor:'transeprent'}} visible={this.state.isImageViewVisible} transparent={true} enableImageZoom={true}  enableSwipeDown={true} >
+                              <ImageViewer style={{backgroundColor:'transeprent'}} imageUrls={this.state.blog.images} index={this.state.resetImageByIndex}/>
+                              <TouchableOpacity  style={{ position:'absolute' , top : 35 , right : 20}} onPress={() => this.setState({isImageViewVisible: false})}>
+                                  <Icon name="close" style={{fontSize:30,color : 'white'   }}/>
+                              </TouchableOpacity>
+                          </Modal>
+
+                          {
+                          this.state.spinner ?
+                          this._renderRows(this.loadingAnimated, 5, '5rows'):
+
+                      <View style={styles.block_Content}>
+                          {
+                              (this.state.blog.is_phone === true) ?
+                                  <TouchableOpacity onPress={() => {
+                                      Linking.openURL(`tel://${this.state.mobile}`)
+                                  }}>
+                                      <View style={[styles.block_Call, styles.box_call]}>
+                                          <View style={styles.marginHorizontal_5}>
+                                              <Icon style={[styles.icon_blcok, {color: '#FFF'}]} type="AntDesign"
+                                                    name='mobile1'/>
+                                          </View>
+                                          <Text style={styles.block_Call_text}>{I18n.translate('call')}</Text>
+                                      </View>
+                                  </TouchableOpacity>
+                                  :
+                                  <View/>
+                          }
+                          {
+                              (this.state.blog.is_phone === true) ?
+                                  <TouchableOpacity onPress={() => {
+                                      // alert( Platform.OS == 'ios' ? '00' + this.state.mobile: '+' + this.state.mobile)
+                                      Linking.openURL(`whatsapp://send?phone=${this.state.mobile}` );
+                                  }}>
+                                      <View style={[styles.block_Call, styles.box_whats]}>
+                                          <View style={styles.marginHorizontal_5}>
+                                              <Icon style={[styles.icon_blcok, {color: '#FFF'}]} type="FontAwesome"
+                                                    name='whatsapp'/>
+                                          </View>
+                                          <Text style={styles.block_Call_text}>{I18n.translate('whats')}</Text>
+                                      </View>
+                                  </TouchableOpacity>
+                                  :
+                                  <View/>
+                          }
+                          {
+                              (this.state.blog.is_chat === true  && this.props.auth)  ?
+                                  <View>
+                                      <TouchableOpacity onPress={() => {
+                                          this.props.navigation.navigate('chatroom', {
+                                              other: this.state.blog.user_id,
+                                              room: this.props.navigation.state.params.blog_id
+                                          })
+                                      }}
+                                      >
+                                          <View style={[styles.block_Call, styles.box_email]}>
+                                              <View style={styles.marginHorizontal_5}>
+                                                  <Icon style={[styles.icon_blcok, {color: '#FFF'}]}
+                                                        type="MaterialCommunityIcons" name='email-outline'/>
+                                              </View>
+                                              <Text style={styles.block_Call_text}>{I18n.translate('send_mail')}</Text>
+                                          </View>
+                                      </TouchableOpacity>
+                                  </View>
+                                  :
+                                  <View/>
+                          }
+
+                      </View>
+                     }
+                          {
+                              this.state.spinner ?
+                                  this._renderRows(this.loadingAnimated, 5, '5rows')
+                                  :
+                                  null
+                          }
+                      <View style={{paddingHorizontal: 10}}>
+                          <View>
+                              <Text style={{
+                                  color: CONST.color,
+                                  fontFamily: 'CairoBold',
+                                  fontSize: 18,
+                                  marginVertical: 10,
+                                  marginHorizontal: 10,
+                                  textAlign : 'left'
+                              }}> {this.state.blog.title} </Text>
+                              {
+                                  (this.state.id !== this.props.user) ?
+                                      <View style={[styles.SelfLeft, styles.paddingHorizontal_10]}>
+                                          <StarRating
+                                              disabled={false}
+                                              fullStarColor='#DAA520'
+                                              starSize={15}
+                                              maxStars={5}
+                                              rating={this.state.rate}
+                                          />
+                                      </View>
+                                      :
+                                      <View/>
+                              }
+                          </View>
+                          <View
+                              style={{display: 'flex', flexDirection: 'row', alignItems: 'center', marginVertical: 10}}>
+                              <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                                  <Icon style={{color: '#bbb', fontSize: 14, marginHorizontal: 10}} type="Feather"
+                                        name='flag'/>
+                                  <Text style={{
+                                      fontFamily: 'CairoRegular',
+                                      fontSize: 14,
+                                      color: '#333'
+                                  }}>{this.state.blog.country} </Text>
+                              </View>
+                              <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                                  <Icon style={{color: '#bbb', fontSize: 14, marginHorizontal: 10}} type="FontAwesome5"
+                                        name='map-marker-alt'/>
+                                  <Text style={{
+                                      fontFamily: 'CairoRegular',
+                                      fontSize: 14,
+                                      color: '#333'
+                                  }}>{this.state.blog.city} </Text>
+                              </View>
+                          </View>
+                          <TouchableOpacity onPress={()=> {this.openMap(this.state.region.latitude , this.state.region.longitude)}}
+                          style={{
+                              justifyContent: "center",
+                              alignItems: 'center',
+                              flexDirection: 'row',
+                              marginVertical: 12
+                          }}>
+                              <Icon name={'location-pin'} type={'Entypo'} style={{color: '#00374B' ,fontSize : 18 }}/>
+                              <Text style={[styles.text, {
+                                  color: '#00374B',
+                                  fontFamily : 'CairoBold',
+                                  textDecorationLine: 'underline',
+                              }]}>{I18n.translate('show_location')}</Text>
+                          </TouchableOpacity>
+                          <View>
+                              <Text style={[styles.TiTle]}>-- {I18n.translate('description')}</Text>
+                              <View style={[{width: '90%', paddingHorizontal: 20}]}>
+                                  <HTML html={this.state.blog.description}
+                                        baseFontStyle={{fontSize: 12, fontFamily: 'CairoBold', color: '#636363' , textAlign:'right'}}
+                                        magesMaxWidth={Dimensions.get('window').width}/>
+                              </View>
+                          </View>
+                          {
+                              (this.state.show_model === 1) ?
+                                  <View>
+                                      <Text style={[styles.TiTle]}>-- {I18n.translate('model')}</Text>
+                                      <View style={[{width: '90%', paddingHorizontal: 20}]}>
+                                          <Text style={[ styles.textRegular , styles.text_gray, styles.textSize_14, styles.rowRight ]}>{ this.state.model_car }</Text>
+                                      </View>
+                                  </View>
+                                  :
+                                  <View/>
+                          }
+                      </View>
+                      {
+                          (this.state.blog.is_video === '1')
+                              ?
+                              <TouchableOpacity onPress={() => this.setState({is_video: true})}>
+                                  <Text style={{textAlign: 'center'}}>
+                                      <Icon name="video" type="Entypo" style={{color: '#F00'}}/>
+                                  </Text>
+                              </TouchableOpacity>
+                              :
+                              <View/>
+                      }
+                      <View style={styles.comment}>
+                          {
+                                this.state.comments.length > 0
+                                  ?
+                                  <Text style={[styles.TiTle]}> {I18n.translate('comments')}</Text>
+                                  :null
+                          }
+                          {this.state.comments.map((comment, i) => {
+                              return (
+                                  <View key={i} style={styles.massage_user}>
+                                      <View style={styles.user}>
+                                          <Text style={styles.time}>{comment.date}</Text>
+                                          <View style={styles.views}>
+                                              <Icon style={styles.icon_user} type="FontAwesome5" name='user'/>
+                                              <Text style={[styles.text_user,{textAlign:'left',alignSelf:'flex-end'}]}>
+                                                  {comment.user}
+                                              </Text>
+                                          </View>
+                                      </View>
+                                      <View style={[styles.block_massage, styles.SelfLeft]}>
+                                          <Text style={[styles.massage, styles.SelfLeft]}>{comment.comment}</Text>
+                                      </View>
+                                      {
+                                          (this.state.user_id === comment.user_id)
+                                              ?
+                                              <TouchableOpacity style={styles.block_report} onPress={() => {
+                                                  this.delete(comment.id, i, 'original')
+                                              }}>
+                                                  <View>
+                                                      <Icon style={styles.report} type="FontAwesome" name='trash'/>
+                                                  </View>
+                                              </TouchableOpacity>
+                                              :
+                                              <View/>
+                                      }
+                                  </View>
+                              )
+                          })}
+                          {
+                              (this.props.user) ?
+                                  <View style={styles.write_comment}>
+                                      <TouchableOpacity onPress={() => this.commentModal(2)}>
+                                          <Text
+                                              style={[styles.text_btn, {
+                                                  color: '#00374B',
+                                                  fontFamily :'CairoBold',
+                                                  textDecorationLine: 'underline'
+                                              }]}
+                                              onChangeText={(comment) => this.changeFocusName(comment)}
+                                          >
+                                              {(this.state.all_comments.length === 0) ? I18n.translate('addComment') : I18n.translate('more')}
+                                          </Text>
+                                      </TouchableOpacity>
+                                  </View>
+                                  : <View/>
+                          }
+
+                      </View>
+                      <Modal isVisible={this.state.is_video} avoidKeyboard={true}>
+                          <View style={[styles.model, {backgroundColor: '#00374B'}]}>
+                              <Video
+                                  source={{uri: this.state.blog.video}}
+                                  shouldPlay
+                                  resizeMode="cover"
+                                  style={{width: '100%', height: 300}}
+                              />
+                              <TouchableOpacity onPress={() => {
+                                  this.setState({is_video: false})
+                              }}>
+                                  <Text style={{
+                                      color: 'white',
+                                      textAlign: 'center',
+                                      fontSize: 22
+                                  }}>{I18n.translate('cancel')}</Text>
+                              </TouchableOpacity>
+
+                          </View>
+                      </Modal>
+
+                      <View style={[styles.old_section, {marginHorizontal: 10}]}>
+                          <Text style={[styles.TiTle]}>{I18n.translate('like')}</Text>
+                          <ScrollView showsHorizontalScrollIndicator={false} horizontal={true}>
+                              {this.state.results.map((result, i) => {
+                                  return (
+                                      <View key={i} style={[styles.block_section_move_mune, styles.width_200, {padding: 0, margin:  10}]}>
+                                          <TouchableOpacity onPress={() => {
+                                              this.props.navigation.navigate(
+                                                  {
+                                                      routeName: 'details',
+                                                      params: {
+                                                          blog_id: result.id,
+                                                      },
+                                                      key: 'APage' + i
+                                                  }
+                                              )
+                                          }}>
+                                              <View style={{position: 'relative', overflow: 'hidden'}}>
+                                                  <Image style={styles.image_MAZAD} source={{uri: result.img}}/>
+                                                  <Text style={[styles.textDate, {
+                                                      textAlign: 'right',
+                                                      fontSize: 10,
+                                                      fontFamily: 'CairoBold'
+                                                  }]}>{result.date}</Text>
+                                              </View>
+                                              <View
+                                                  style={[styles.overHidden, styles.paddingVertical_10, styles.paddingHorizontal_10]}>
+                                                  <View
+                                                      style={{flexDirection: 'row', width: '100%', marginVertical: 5}}>
+                                                      <Text style={{
+                                                          fontSize: 13,
+                                                          color: '#bbb',
+                                                          fontFamily: 'CairoBold'
+                                                      }}
+                                                            numberOfLines={1} ellipsizeMode='tail'>
+                                                          {result.title}
+                                                      </Text>
+                                                  </View>
+                                                  <View style={{
+                                                      flexDirection: 'row',
+                                                      width: '100%',
+                                                      alignItems: 'center',
+                                                      justifyContent: 'space-between'
+                                                  }}>
+                                                      <View style={{flexDirection: 'row'}}>
+                                                          <Icon style={styles.icon_user} type="FontAwesome5"
+                                                                name='user'/>
+                                                          <Text style={styles.text_user}>
+                                                              {result.user}
+                                                          </Text>
+                                                      </View>
+                                                      <View style={{flexDirection: 'row'}}>
+                                                          <Icon style={styles.icon_user} type="FontAwesome5"
+                                                                name='map-marker-alt'/>
+                                                          <Text style={styles.text_user}>{result.country}</Text>
+                                                      </View>
+                                                  </View>
+                                              </View>
+                                          </TouchableOpacity>
+                                      </View>
+                                  )
+                              })}
+                          </ScrollView>
+                      </View>
+
+                  </View>
+                  </Content>
+
+          <Modal avoidKeyboard={true} onBackdropPress={() => this.setState({ commentModal: false })} isVisible={this.state.commentModal}>
+              <View style={styles.model}>
+                  <View style={[styles.commenter , {width:'100%'}]}>
+                      <Text style={styles.TiTle}>{I18n.translate('comments')}</Text>
+                      <ScrollView style={{height : 200, width : '100%'}} ref={ref => this.scrollView = ref} onContentSizeChange={(contentWidth, contentHeight)=>{ this.scrollView.scrollToEnd({animated: true})}}>
+                          {this.state.all_comments.map((comment, i) => {
+                              return (
+                                  <View key ={i} style={styles.massage_user}>
+                                      <View style={styles.user}>
+                                          <Text style={styles.time}>{comment.date}</Text>
+                                          <View style={styles.views}>
+                                              <Icon style={styles.icon_user} type="FontAwesome5" name='user'/>
+                                              <Text style={styles.text_user}>
+                                                  {comment.user}
+                                              </Text>
+                                          </View>
+                                      </View>
+                                      <View style={styles.block_massage}>
+                                          <Text style={styles.massage}>{comment.comment}</Text>
+                                      </View>
+                                      {
+                                          (this.state.user_id == comment.user_id)
+                                              ?
+                                              <TouchableOpacity  style={styles.block_report} onPress={()=>{this.delete(comment.id,i,'modal') }}>
+                                                  <View>
+                                                      <Icon  style={styles.report} type="FontAwesome" name='trash' />
+                                                  </View>
+                                              </TouchableOpacity>
+                                              : <View/>
+                                      }
+                                  </View>
+                              )
+                          })}
+                      </ScrollView>
+                      <View>
+                          <Text style={[ styles.TiTle, styles.paddingHorizontal_10 ]}>* {I18n.translate('leave_comment')}</Text>
+                          <View style={[styles.Width_90 , styles.flexCenter, styles.marginVertical_5 ]}>
+                              <Textarea
+                                  onChangeText  = {(comment) => this.setState({comment})}
+                                  style         = {[styles.Border, styles.light_gray , styles.height_100, styles.paddingVertical_10, styles.Radius_5, styles.textSize_14, styles.textRegular, styles.Width_100]}
+                                  // placeholder   = {I18n.translate('leave_comment')}
+                              />
+                          </View>
+                      </View>
+                      {/*<Item style={{marginTop:0}} >*/}
+                      {/*    */}
+                      {/*    <Input value={this.state.comment} onChangeText={(comment)=> this.setState({comment: comment})}  style={{ textAlign : 'center',fontFamily            : 'CairoRegular'}} placeholder={I18n.translate('leave_comment')}/>*/}
+                      {/*</Item>*/}
+                      <View style={styles.write_comment}>
+                            <TouchableOpacity style={[ styles.bg_darkGreen, styles.width_120, styles.flexCenter, styles.height_40, styles.Radius_5 ]}>
+                                 <Text onPress={() => this.CommentBlog()} style={[ styles.text_btn , { color : '#fff' }]}>{I18n.translate('addComment')}</Text>
+                            </TouchableOpacity>
+                      </View>
+                   </View>
+               </View>
+          </Modal>
+
+      </Container>
+    );
+  }
+}
+const mapStateToProps = ({ auth,profile, lang  }) => {
+
+    return {
+
+        auth   : auth.user,
+        lang   : lang.lang,
+        result   : auth.success,
+        userId   : auth.user_id,
+        user   : profile.user
+    };
+};
+export default connect(mapStateToProps, { userLogin ,profile})(DetilsE3lan);
+
